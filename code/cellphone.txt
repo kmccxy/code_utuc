@@ -1,0 +1,54 @@
+library(Seurat)
+exp  <- as.data.frame( scRNA_harmony@assays$RNA@data)
+dim(exp)
+exp[1:4,1:4]
+library(devtools)
+install_github('jmzeng1314/AnnoProbe')
+
+library(AnnoProbe)
+ids=annoGene( rownames(exp),'SYMBOL','human')
+head(ids)
+##################
+length(unique(ids$ENSEMBL))
+ids=ids[!duplicated(ids$ENSEMBL),]
+length(unique(ids$SYMBOL))
+ids=ids[!duplicated(ids$SYMBOL),]
+
+test_counts=exp[ids$SYMBOL,]
+test_counts[1:4,1:4]
+table(sce2@active.ident)
+test_meta <-  data.frame(Cell = rownames(sce2@meta.data),
+                         cell_type = sce2@active.ident )  
+head(test_meta)
+test_meta$cell_type=gsub(' ','_',test_meta$cell_type)
+test_meta$cell_type=gsub('\\+','',test_meta$cell_type)
+
+table(test_meta$cell_type)
+length(unique(test_meta$Cell))
+
+identical(colnames(test_counts),test_meta$Cell)
+rownames(test_counts) = ids$ENSEMBL
+
+test_counts= cbind(rownames(test_counts),test_counts)
+colnames(test_counts)[1]='Gene'
+test_counts[1:4,1:4]
+
+write.table(test_counts, "test_counts.txt",  row.names=F, sep='\t',quote = F)
+write.table(test_meta, "test_meta.txt", row.names=F, sep='\t',quote = F)
+head(test_meta)
+
+###############py
+cellphonedb database download
+cellphonedb database generate --user-interactions cellphonedb-data/data/interaction_input.csv
+cellphonedb method statistical_analysis test_meta1.txt test_counts.txt  --iterations=1000 --threads=16 --database /home/xiao_yu/singleut/cellchat/celldb/cellphonedb_user_2023-07-01-00_37.db
+
+
+
+
+
+
+
+
+
+
+
