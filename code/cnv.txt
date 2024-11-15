@@ -1,0 +1,73 @@
+library(dplyr)
+library(Seurat)
+library(tidyverse)
+library(patchwork)
+
+
+infercell <- subset(scRNA_harmony, idents = "Tumor")
+Idents(infercell)=infercell@meta.data$Markertype
+infercell <- subset(infercell, idents = c("Epithelial_cells","T_cells"))
+saveRDS(infercell,file = "infercell.rds")
+
+
+
+
+library("infercnv")
+
+
+pos=read.table("human.gene.positions")
+pos1=distinct(pos,V7,.keep_all = TRUE)
+rownames(pos1)=pos1$V7
+pos2=select(pos1,V7,V2,V3,V4)
+View(pos2)
+write.table(pos2, 'geneLocate.txt', row.names=F, col.names=F, sep='\t')
+
+##scRNA1=scRNA_harmony[,sample(colnames(scRNA_harmony),500)]
+scRNA1=infercell
+exprMatrix <- as.matrix(GetAssayData(scRNA1, slot='counts'))
+cellAnnota <- subset(scRNA1@meta.data, select='Markertype')
+groupFiles='groupFiles.txt'
+dim(exprMatrix)
+write.table(cellAnnota,file =" groupFiles.txt",sep = '\t',col.names = F)
+?CreateInfercnvObject
+infercnv_obj = CreateInfercnvObject(raw_counts_matrix=exprMatrix,
+                                    annotations_file=" groupFiles.txt",
+                                    delim="\t",
+                                    gene_order_file= "geneLocate.txt",
+                                    ref_group_names=c("T_cells"))
+
+infercnv_obj = infercnv::run(infercnv_obj,
+                             cutoff=0.1, # use 1 for smart-seq, 0.1 for 10x-genomics 
+                             out_dir=  'cnvonlytumor/' ,  # dir is auto-created for storing outputs
+                             cluster_by_groups=T, #  cluster_by_groups：
+                             HMM=FALSE,
+                             hclust_method="ward.D2", plot_steps=F,denoise=TRUE,num_threads=7
+)
+
+
+######################################################################################3
+
+cellAnnota <- subset(scRNA1@meta.data, select='celltype')
+groupFiles='groupFiles1.txt'
+dim(exprMatrix)
+write.table(cellAnnota,file =" groupFiles1.txt",sep = '\t',col.names = F)
+
+table(cellAnnota$celltype)
+
+infercnv_obj = CreateInfercnvObject(raw_counts_matrix=exprMatrix,
+                                    annotations_file=" groupFiles1.txt",
+                                    delim="\t",
+                                    gene_order_file= "geneLocate.txt",
+                                    ref_group_names="T_cells")
+
+infercnv_obj2 = infercnv::run(infercnv_obj,
+                              cutoff=0.1, # use 1 for smart-seq, 0.1 for 10x-genomics 
+                              out_dir=  'cnv.REF/' ,  # dir is auto-created for storing outputs
+                              cluster_by_groups=T,   #  cluster_by_groups：先区分细胞来源，再做层次聚类
+                              hclust_method="ward.D2", plot_steps=F,denoise=TRUE,
+                              HMM=F,  ##特别耗时间
+                              num_threads=4
+)
+
+
+
