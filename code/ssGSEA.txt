@@ -1,0 +1,50 @@
+library(GSVA)
+scRNA_ssgsea = readRDS("T_Fibroblasts.rds")
+genes=read.table("High1.5.txt", header=F, sep="\t", check.names=F)
+genes=unique(as.vector(genes[,1]))
+genes_ssgsea = genes
+
+# ##############
+genes_ssgsea = genes_ssgsea[genes_ssgsea%in%rownames(scRNA_ssgsea)]
+
+gene.expr <-  as.matrix(scRNA_ssgsea[["RNA"]]@data)
+
+genes_ssgsea = as.data.frame(genes_ssgsea)
+ssGSEA.result <- GSVA::gsva(gene.expr, genes_ssgsea,method='ssgsea',kcdf='Gaussian')
+
+Data = data.frame('cell_type'=scRNA_ssgsea$Fibtype,
+                  'Score'=ssGSEA.result[1,])
+
+Data_summary = Data %>% 
+  group_by(cell_type) %>% 
+  summarise(across(.cols = Score,.fns = list(
+    'mean' = mean, 'sd' =sd
+  ))) %>% 
+  dplyr::rename('mean' = Score_mean,
+                'sd' = Score_sd)
+Data = left_join(Data,Data_summary,by="cell_type")
+
+
+ggplot(Data, aes(x=cell_type, y=Score,fill=cell_type)) + 
+  geom_violin(trim=FALSE,color="white") + #绘制小提琴图
+  geom_boxplot(width=0.2,position=position_dodge(0.9))+
+  geom_point(aes(x=cell_type, y=mean),pch=19,position=position_dodge(0.9),size=1.5)+#绘制均值为点图
+  geom_errorbar(aes(ymin = mean-sd, ymax=mean+sd), #误差条表示95%的置信区间
+                width=0.1, #误差条末端短横线的宽度
+                position=position_dodge(0.9), 
+                color="black",
+                alpha = 0.7,
+                size=0.5) +
+  scale_fill_manual(values = ggsci::pal_aaas()(9))+ #设置填充的颜色
+  theme_bw()+ #背景变为白色
+  theme(axis.text.x=element_text(angle=45,hjust = 1,colour="black",family="Times",size=10), #设置x轴刻度标签的字体显示倾斜角度为15度，并向下调整1(hjust = 1)，字体簇为Times大小为20
+        axis.text.y=element_text(family="Times",size=10,face="plain"), #设置y轴刻度标签的字体簇，字体大小，字体样式为plain
+        axis.title.y=element_text(family="Times",size = 20,face="plain"), #设置y轴标题的字体属性
+        panel.border = element_blank(),axis.line = element_line(colour = "black",size=1), #去除默认填充的灰色，并将x=0轴和y=0轴加粗显示(size=1)
+        legend.text=element_text(face="italic", family="Times", colour="black",  #设置图例的子标题的字体属性
+                                 size=8),
+        legend.title=element_text(face="italic", family="Times", colour="black", #设置图例的总标题的字体属性
+                                  size=12),
+        panel.grid.major = element_blank(),   #不显示网格线
+        panel.grid.minor = element_blank())+  #不显示网格线
+  ylab("")+xlab("") #设置x轴和y轴的标题
