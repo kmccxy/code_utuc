@@ -1,0 +1,27 @@
+library(ggplot2)
+library(reshape2)
+#subset gene expression 
+
+marker=c()
+datavln_data = as.data.frame(pbmc[["RNA"]]@data[marker,])
+
+#add gene name
+vln_data $gene=rownames(vln_data )
+vln_data =melt(vln_data ,id="gene")
+colnames(vln_data)[c(2,3)]=c("cellbarcode","exp")
+
+pbmc$celltype <- pbmc@active.identp
+bmc$cellbarcode<-  names(pbmc$percent.mt)
+anno=pbmc@meta.data[,c("cellbarcode","celltype")]
+
+vln_data  = inner_join(vln_data ,anno,by="cellbarcode")
+
+vln_data %>% ggplot(aes(celltype,exp))+geom_violin(aes(fill=gene),scale = "width")+ 
+  facet_grid(vln_data $ gene~.,scales = "free_y")+ 
+  scale_fill_manual(values = col)+ 
+  scale_x_discrete("")+scale_y_continuous("")+ 
+  theme_bw()+ 
+  theme( 
+    axis.text.x.bottom = element_text(angle = 45,hjust = 1,vjust = 1),
+    panel.grid.major = element_blank(),panel.grid.minor = element_blank(), 
+    legend.position = "none" )
