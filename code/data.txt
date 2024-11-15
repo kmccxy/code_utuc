@@ -1,0 +1,79 @@
+rm(list=ls())
+
+setwd("/home/shpc_100554/singleut")
+
+###
+library(Seurat)
+library(tidyverse)
+library(dplyr)
+library(patchwork)
+library(harmony)
+BiocManager::install("SingleCellExperiment")
+
+
+seurat_object = lapply(dirs,function(dirs){ CreateSeuratObject(counts = Read10X(dirs), 
+                                                               project = dirs,min.cells = 3, min.features = 500)})
+
+scRNA_harmony <- seurat_object[[1]]
+for (i in 2:length(seurat_object)) {
+  combined_seurat <- MergeSeurat(combined_seurat, seurat_object[[i]], project = "combined", merge.data = TRUE)
+}
+
+
+##
+scRNA_harmony[["percent.mt"]] <- PercentageFeatureSet(scRNA_harmony, pattern = "^MT-")
+HB.genes <- c("HBA1","HBA2","HBB","HBD","HBE1","HBG1","HBG2","HBM","HBQ1","HBZ")
+HB_m <- match(HB.genes, rownames(scRNA_harmony@assays$RNA)) 
+HB.genes <- rownames(scRNA_harmony@assays$RNA)[HB_m] 
+HB.genes <- HB.genes[!is.na(HB.genes)] 
+scRNA_harmony[["percent.HB"]]<-PercentageFeatureSet(scRNA_harmony, features=HB.genes) 
+#head(scRNA_harmony@meta.data)
+col.num <- length(levels(scRNA_harmony@active.ident))
+violin <- VlnPlot(scRNA_harmony,
+                  features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), 
+                  cols =rainbow(col.num), 
+                  pt.size = 0.01, 
+                  ncol = 4) + 
+  theme(axis.title.x=element_blank(), axis.text.x=element_blank(), axis.ticks.x=element_blank()) 
+
+violin
+
+scRNA_harmony <- subset(scRNA_harmony, subset = nFeature_RNA > 300  & nFeature_RNA <5000 & percent.mt < 25 )
+
+#####
+
+scRNA_harmony <- NormalizeData(scRNA_harmony) %>% FindVariableFeatures() %>% ScaleData() %>% RunPCA(verbose=FALSE)
+DimPlot(scRNA_harmony, group.by="orig.ident",reduction = "pca")
+
+system.time({scRNA_harmony <- RunHarmony(scRNA_harmony, group.by.vars = "orig.ident")})
+DimPlot(scRNA_harmony, group.by="orig.ident",reduction = "harmony")
+###
+
+
+###
+
+scRNA_harmony <- FindNeighbors(scRNA_harmony, reduction = "harmony", dims = 1:15) %>% FindClusters(resolution = 0.5)
+
+scRNA_harmony <- RunUMAP(scRNA_harmony, reduction = "harmony", dims = 1:15)
+scRNA_harmony <- RunTSNE(scRNA_harmony, dims = 1:15)
+saveRDS(scRNA_harmony,file = "scRNA_harmony.RDS")
+
+plot1 =DimPlot(scRNA_harmony, reduction = "umap",label = T) 
+plot2 = DimPlot(scRNA_harmony, reduction = "umap", group.by='orig.ident') 
+plot1 =DimPlot(scRNA_harmony, reduction = "tsne",label = T) 
+plot2 = DimPlot(scRNA_harmony, reduction = "tsne", group.by='orig.ident') 
+
+
+markers <- FindAllMarkers(object = scRNA_harmony, test.use="wilcox" ,
+                          only.pos = F,
+                          logfc.threshold = 0.5)   
+all.markers <- subset(all.markers, p_val_adj < 0.05 & abs(avg_log2FC) > 0.5)
+top30 = all.markers %>% group_by(cluster) %>% top_n(n = 30, wt = avg_log2FC)
+
+write.table(markers,file = "markers.txt",quote = F,sep="\t",row.names=F)
+write.table(all.markers,file = "all.markers.txt",quote = F,sep="\t",row.names=F)
+write.table(top30,file = "top30.txt",quote = F,sep="\t",row.names=F)
+
+
+
+
