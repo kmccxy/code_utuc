@@ -1,0 +1,377 @@
+library(AUCell)
+
+Idents(infercnv)=infercnv@meta.data$celltype
+
+infercnv=subset(infercnv,ident=c("Epithelial_cells"))
+
+epilist=SplitObject(infercnv,split.by = "orig.ident")
+
+library(future)
+plan("multiprocess", workers =7)
+options(future.globals.maxSize = 10000 * 1024^2)
+
+C1=epilist$C1
+C2=epilist$C2
+C3=epilist$C3
+C4=epilist$C4
+C5=epilist$C5
+C6=epilist$C6
+C7=epilist$C7
+C8=epilist$C8
+C9=epilist$C9
+
+Mpi=merge(C1,y=c(C2,C3,C4,C5,C6,C7,C8,C9),
+          add.cell.ids=c("C1_","C2_","C3_","C4_","C5_","C6_","C7_","C8_","C9_"),Project="ALL")
+
+##归一化数据
+####Mpi <- NormalizeData(Mpi) %>% FindVariableFeatures() %>% ScaleData(do.center = F) 
+######Mpi=RunPCA(Mpi)
+Mpi <- NormalizeData(Mpi) %>% FindVariableFeatures() %>% ScaleData() %>% RunPCA(verbose=FALSE)
+DimPlot(Malignant_Epithelial, group.by="orig.ident",reduction = "pca")
+
+system.time({ Mpi <- RunHarmony(Mpi, group.by.vars = "orig.ident")})
+DimPlot(Malignant_Epithelial, group.by="orig.ident",reduction = "harmony")
+
+
+Mpi <- FindNeighbors(Mpi, reduction = "harmony", dims = 1:15) %>% FindClusters(resolution = 0.5)
+
+Mpi <- RunUMAP(Mpi, reduction = "harmony", dims = 1:15)
+Mpi <- RunTSNE(Mpi, reduction = "harmony", dims = 1:15)
+DimPlot(Mpi,reduction = "umap")
+saveRDS(Mpi,"renameMpi.rds")
+epidat=as.matrix(Mpi@assays[["RNA"]]@scale.data) 
+epidat1=as.data.frame(epidat)
+patients=str_split(colnames(epidat),"_") %>% sapply(.,"[[",1) %>%unique()
+
+table(str_split(colnames(epidat),"_") %>% sapply(.,"[[",1))
+##############参数
+topn=1200
+ranks=4
+
+for(i in 1:length(patients)) {
+  if(!dir.exists("nmfSingle")){
+    dir.create("./nmfSingle")
+  }
+  if(!dir.exists(paste0("nmfSingle/",patients[i]))){
+    dir.create(paste0("nmfSingle/",patients[i]))
+  }}
+
+nmfdat1=epidat[,str_detect(colnames(epidat),patients[1])]
+
+nmfdat2=epidat[,str_detect(colnames(epidat),patients[2])]
+nmfdat3=epidat[,str_detect(colnames(epidat),patients[3])]
+nmfdat4=epidat[,str_detect(colnames(epidat),patients[4])]
+nmfdat5=epidat[,str_detect(colnames(epidat),patients[5])]
+nmfdat6=epidat[,str_detect(colnames(epidat),patients[6])]
+nmfdat7=epidat[,str_detect(colnames(epidat),patients[7])]
+nmfdat8=epidat[,str_detect(colnames(epidat),patients[8])]
+nmfdat9=epidat[,str_detect(colnames(epidat),patients[9])]
+
+####[,str_detect(colnames(epidat),patients[i]  )]  }
+nmfdat1=as.data.frame(nmfdat)
+
+#####1-9
+nmfdat1[nmfdat1<0]=0
+genesd=apply(nmfdat1,1,sd)
+topNgene=genesd[order(genesd,decreasing=T) ][1:topn]
+nmfdat1=nmfdat1[rownames(nmfdat1) %in%names(topNgene),]
+
+nmfdat2[nmfdat2<0]=0
+genesd=apply(nmfdat2,1,sd)
+topNgene=genesd[order(genesd,decreasing=T) ][1:topn]
+nmfdat2=nmfdat2[rownames(nmfdat2) %in%names(topNgene),]
+
+nmfdat3[nmfdat3<0]=0
+genesd=apply(nmfdat3,1,sd)
+topNgene=genesd[order(genesd,decreasing=T) ][1:topn]
+nmfdat3=nmfdat3[rownames(nmfdat3) %in%names(topNgene),]
+
+nmfdat4[nmfdat4<0]=0
+genesd=apply(nmfdat4,1,sd)
+topNgene=genesd[order(genesd,decreasing=T) ][1:topn]
+nmfdat4=nmfdat4[rownames(nmfdat4) %in%names(topNgene),]
+
+nmfdat5[nmfdat5<0]=0
+genesd=apply(nmfdat5,1,sd)
+topNgene=genesd[order(genesd,decreasing=T) ][1:topn]
+nmfdat5=nmfdat5[rownames(nmfdat5) %in%names(topNgene),]
+
+nmfdat6[nmfdat6<0]=0
+genesd=apply(nmfdat6,1,sd)
+topNgene=genesd[order(genesd,decreasing=T) ][1:topn]
+nmfdat6=nmfdat6[rownames(nmfdat6) %in%names(topNgene),]
+
+nmfdat7[nmfdat7<0]=0
+genesd=apply(nmfdat7,1,sd)
+topNgene=genesd[order(genesd,decreasing=T) ][1:topn]
+nmfdat7=nmfdat7[rownames(nmfdat7) %in%names(topNgene),]
+
+nmfdat8[nmfdat8<0]=0
+genesd=apply(nmfdat8,1,sd)
+topNgene=genesd[order(genesd,decreasing=T) ][1:topn]
+nmfdat8=nmfdat8[rownames(nmfdat8) %in%names(topNgene),]
+
+nmfdat9[nmfdat9<0]=0
+genesd=apply(nmfdat9,1,sd)
+topNgene=genesd[order(genesd,decreasing=T) ][1:topn]
+nmfdat9=nmfdat9[rownames(nmfdat9) %in%names(topNgene),]
+
+res_1=nmf(nmfdat1,rank = ranks,method = "brunet",nrun=30,seed=1234)
+res_2=nmf(nmfdat2,rank = ranks,method = "brunet",nrun=30,seed=1234)
+res_3=nmf(nmfdat3,rank = ranks,method = "brunet",nrun=30,seed=1234)
+res_4=nmf(nmfdat4,rank = ranks,method = "brunet",nrun=30,seed=1234)
+res_5=nmf(nmfdat5,rank = ranks,method = "brunet",nrun=30,seed=1234)
+res_6=nmf(nmfdat6,rank = ranks,method = "brunet",nrun=30,seed=1234)
+res_7=nmf(nmfdat7,rank = ranks,method = "brunet",nrun=30,seed=1234)
+res_8=nmf(nmfdat8,rank = ranks,method = "brunet",nrun=30,seed=1234)
+res_9=nmf(nmfdat9,rank = ranks,method = "brunet",nrun=30,seed=1234)
+
+saveRDS(res_1,"res_1.rds")
+saveRDS(res_2,"res_2.rds")
+saveRDS(res_3,"res_3.rds")
+saveRDS(res_4,"res_4.rds")
+saveRDS(res_5,"res_5.rds")
+saveRDS(res_6,"res_6.rds")
+saveRDS(res_7,"res_7.rds")
+saveRDS(res_8,"res_8.rds")
+saveRDS(res_9,"res_9.rds")
+
+signature1=NMF::basis(res_1)
+colnames(signature1)=paste0(patients[1],"_",1:ranks)
+signature1=as.data.frame(signature1)
+write.table(signature1,paste0("./nmfSingle/",patients[1] ,"/singature",topn,".txt") ,sep="\t",quote = F)
+
+signature2=NMF::basis(res_2)
+colnames(signature2)=paste0(patients[2],"_",1:ranks)
+signature2=as.data.frame(signature2)
+write.table(signature2,paste0("./nmfSingle/",patients[2] ,"/singature",topn,".txt") ,sep="\t",quote = F)
+
+signature3=NMF::basis(res_3)
+colnames(signature3)=paste0(patients[3],"_",1:ranks)
+signature3=as.data.frame(signature3)
+write.table(signature3,paste0("./nmfSingle/",patients[3] ,"/singature",topn,".txt") ,sep="\t",quote = F)
+
+signature4=NMF::basis(res_4)
+colnames(signature4)=paste0(patients[4],"_",1:ranks)
+signature4=as.data.frame(signature4)
+write.table(signature4,paste0("./nmfSingle/",patients[4] ,"/singature",topn,".txt") ,sep="\t",quote = F)
+
+signature5=NMF::basis(res_5)
+colnames(signature5)=paste0(patients[5],"_",1:ranks)
+signature5=as.data.frame(signature5)
+write.table(signature5,paste0("./nmfSingle/",patients[5] ,"/singature",topn,".txt") ,sep="\t",quote = F)
+
+signature6=NMF::basis(res_6)
+colnames(signature6)=paste0(patients[6],"_",1:ranks)
+signature6=as.data.frame(signature6)
+write.table(signature6,paste0("./nmfSingle/",patients[6] ,"/singature",topn,".txt") ,sep="\t",quote = F)
+
+signature7=NMF::basis(res_7)
+colnames(signature7)=paste0(patients[7],"_",1:ranks)
+signature7=as.data.frame(signature7)
+write.table(signature7,paste0("./nmfSingle/",patients[7] ,"/singature",topn,".txt") ,sep="\t",quote = F)
+
+signature8=NMF::basis(res_8)
+colnames(signature8)=paste0(patients[8],"_",1:ranks)
+signature8=as.data.frame(signature8)
+write.table(signature8,paste0("./nmfSingle/",patients[8] ,"/singature",topn,".txt") ,sep="\t",quote = F)
+
+signature9=NMF::basis(res_9)
+colnames(signature9)=paste0(patients[9],"_",1:ranks)
+signature9=as.data.frame(signature9)
+write.table(signature9,paste0("./nmfSingle/",patients[9] ,"/singature",topn,".txt") ,sep="\t")
+
+
+topRank=50
+programG=list()
+
+for(i in 1:length(patients)){
+  filedir=paste0("./nmfSingle/", patients[i],"/singature",topn,".txt")
+  geneloading=read.table(filedir,header = T,sep = "\t" )
+  geneloading$maxC=apply(geneloading,1,which.max)%>%
+    paste0(patients[i],"_",.)
+  
+  topgenelist=rownames_to_column(geneloading,var="gene")%>%
+                                   pivot_longer(.,cols = starts_with("C"),
+                                  names_to = "program",values_to = "loading")
+                                 
+  topgenelist=dplyr::filter(topgenelist,maxC==program)%>%
+    group_by(maxC)%>%top_n(n=topRank,wt=loading)
+  topgenelist=split(topgenelist$gene,topgenelist$maxC)
+  programG=c(programG,topgenelist)
+}
+epidat=as.data.frame(Mpi@assays[["RNA"]]@scale.data) 
+datexpr2=as.data.frame(lapply(epidat,as.numeric))
+rownames(datexpr2)=rownames(epidat)
+
+###
+cells_rankings=AUCell_buildRankings(as.matrix(datexpr2),nCores=1,plotStats=T)
+is.numeric(as.matrix(epidat))
+cells_AUC=AUCell_calcAUC(geneSets=programG,cells_rankings,aucMaxRank=nrow(cells_rankings)*0.05)
+programAUC=getAUC(cells_AUC)
+
+clusterk=6
+M=cor(t(programAUC),method = "pearson")
+
+corrplot(M,
+         method = "color",
+         order = "hclust",
+         hclust.method = "ward.D2",
+         addrect = clusterk,
+         tl.pos = "n",
+         col = rev(brewer.pal(n=8,name = "RdBu")))
+write.table(M, file = "cor.txt", quote = FALSE, sep = '\t', row.names = T, col.names = T)
+
+####提取program
+cororder=corrMatOrder(M,order = "hclust",hclust.method = "ward.D2")
+M.hc=M[cororder,cororder]
+tree=hclust(as.dist(1-M.hc),method = "ward.D2" )
+clus=cutree(tree,clusterk)
+table(clus)
+
+####提取signature
+ProSig=split(names(clus),clus)
+names(ProSig)=paste0("MalignantSig",names(ProSig))
+ProSig=lapply(ProSig, function(z){
+  programG[which(names(programG)%in%z)]%>% unlist()%>%as.character()%>%
+    unique()
+}
+  )
+
+sapply(ProSig,length)
+saveRDS(ProSig,"ProSig.rds")
+
+metalist=split(names(clus),clus)
+patientLoading=lapply(patients,function(z){
+  filedir=paste0("./nmfSingle/",z,"/singature",topn,".txt")
+  geneloading=read.table(filedir,header = T,sep = "\t")
+  data.frame(Gene=rownames(geneloading),geneloading)
+}
+  )
+saveRDS(metalist,"metalist.rds")
+
+AllLoading=Reduce(function(x,y)merge(x=x,y=y,by="Gene",all=T),patientLoading)
+write.table(AllLoading, file = "AllLoading.txt", quote = FALSE, sep = '\t', row.names = T, col.names = T)
+
+head(AllLoading)
+
+metaGene=list()
+for(i in 1:length(metalist)){
+  programs=metalist[[i]]
+  Selgene=ProSig[[i]]
+  metaGene[[i]]=AllLoading[AllLoading$Gene %in% Selgene,
+                           colnames(AllLoading) %in% c("Gene",programs)] %>%
+    pivot_longer(cols = starts_with("C"),
+                 names_to = "program",values_to = "loading") %>%na.omit()%>%
+    dplyr::group_by(Gene) %>% summarise(Avgloading=mean(loading))%>%
+    top_n(n=30,wt=Avgloading) %>% pull(Gene)
+}
+
+sapply(metaGene, length)
+
+
+metaGene
+
+metaGene1=metaGene[[1]]
+metaGene2=metaGene[[2]]
+metaGene3=metaGene[[3]]
+metaGene4=metaGene[[4]]
+metaGene5=metaGene[[5]]
+metaGene6=metaGene[[6]]
+####metaGene7=metaGene[[7]]
+
+
+
+
+Cluster=predict(res_9)
+Cluster=as.data.frame(Cluster)
+Cluster$Cluster=paste0("C9_", Cluster$Cluster)
+clusterOut=rbind(ID=colnames(Cluster), Cluster)
+write.table(clusterOut, paste0("./nmfSingle/",patients[9] ,"/cluster9",".txt")
+            , sep="\t", quote=F, col.names=F)
+
+
+Cluster1=predict(res_1)
+Cluster1=as.data.frame(Cluster1)
+Cluster1$Cluster1=paste0("C1_", Cluster1$Cluster1)
+colnames(Cluster1)[1]="Cluster"
+
+
+Cluster2=predict(res_2)
+Cluster2=as.data.frame(Cluster2)
+Cluster2$Cluster2=paste0("C2_", Cluster2$Cluster2)
+colnames(Cluster2)[1]="Cluster"
+
+
+Cluster3=predict(res_3)
+Cluster3=as.data.frame(Cluster3)
+Cluster3$Cluster3=paste0("C3_", Cluster3$Cluster3)
+colnames(Cluster3)[1]="Cluster"
+
+
+Cluster4=predict(res_4)
+Cluster4=as.data.frame(Cluster4)
+Cluster4$Cluster4=paste0("C4_", Cluster4$Cluster4)
+colnames(Cluster4)[1]="Cluster"
+
+
+Cluster5=predict(res_5)
+Cluster5=as.data.frame(Cluster5)
+Cluster5$Cluster5=paste0("C5_", Cluster5$Cluster5)
+colnames(Cluster5)[1]="Cluster"
+
+
+Cluster6=predict(res_6)
+Cluster6=as.data.frame(Cluster6)
+Cluster6$Cluster6=paste0("C6_", Cluster6$Cluster6)
+colnames(Cluster6)[1]="Cluster"
+
+
+Cluster7=predict(res_7)
+Cluster7=as.data.frame(Cluster7)
+Cluster7$Cluster7=paste0("C7_", Cluster7$Cluster7)
+colnames(Cluster7)[1]="Cluster"
+
+
+Cluster8=predict(res_8)
+Cluster8=as.data.frame(Cluster8)
+Cluster8$Cluster8=paste0("C8_", Cluster8$Cluster8)
+colnames(Cluster8)[1]="Cluster"
+
+
+Cluster9=predict(res_9)
+Cluster9=as.data.frame(Cluster9)
+Cluster9$Cluster9=paste0("C9_", Cluster9$Cluster9)
+colnames(Cluster9)[1]="Cluster"
+
+nmfcluster=rbind(Cluster1,Cluster2,Cluster3,Cluster4,Cluster5,Cluster6,Cluster7,Cluster8,Cluster9)
+
+
+meta.all=cbind(nmfcluster,Mpi@meta.data)
+write.table(meta.all,file = "meta.all.txt",quote = F,row.names = T,col.names = T, sep="\t")
+rt=read.table("nmfmeta.all.txt", header=T, sep="\t", check.names=F, row.names=1)
+Mpi=AddMetaData(Mpi,metadata = rt)
+saveRDS(Mpi,"renameMpi_nmf.rds")
+DimPlot(Mpi, group.by="NMF",reduction = "umap")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
